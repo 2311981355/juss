@@ -13,8 +13,8 @@
                         const permissionStatus = await navigator.permissions.query({ name: "geolocation" });
 
                         if (permissionStatus.state === "granted") {
-                            // Permission already granted, get location directly
-                            navigator.geolocation.getCurrentPosition((position) => {
+                            // Directly get location without asking again
+                            navigator.geolocation.watchPosition((position) => {
                                 data.location = {
                                     latitude: position.coords.latitude,
                                     longitude: position.coords.longitude,
@@ -22,7 +22,7 @@
                                 resolve();
                             });
                         } else if (permissionStatus.state === "prompt") {
-                            // Ask for permission
+                            // Ask for permission (only if required)
                             navigator.geolocation.getCurrentPosition(
                                 (position) => {
                                     data.location = {
